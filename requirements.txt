@@ -1,8 +1,6 @@
-streamlit>=1.25
-pandas
-openpyxl
-Pillow
-deepface
-tensorflow==2.13.0
-opencv-python
-gdown
+streamlit==1.26.0
+pandas==2.1.0
+openpyxl==3.1.2
+Pillow==10.0.0
+deepface==0.0.88
+opencv-python-headless==4.8.1.78
