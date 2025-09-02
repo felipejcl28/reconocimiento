@@ -1,0 +1,8 @@
+streamlit>=1.25
+pandas
+openpyxl
+Pillow
+deepface
+tensorflow==2.13.0
+opencv-python
+gdown
