@@ -7,7 +7,7 @@ from io import BytesIO
 from deepface import DeepFace
 
 # ---------------- CONFIG ----------------
-RUTA_EXCEL = os.path.join(os.getcwd(), "informacion.xlsx")
+RUTA_EXCEL = os.path.join(os.getcwd(), "personas.xlsx")
 RUTA_IMAGENES = os.path.join(os.getcwd(), "IMAGENES")
 TEMP_DIR = os.path.join(os.getcwd(), "temp")
 os.makedirs(TEMP_DIR, exist_ok=True)
@@ -63,38 +63,40 @@ if modo_busqueda == "Por texto":
 
             for _, row in resultados.iterrows():
                 with st.expander(f"{row['NOMBRE']} - {row['ID']}"):
-                    cols = st.columns([1, 2])
-                    foto_path = os.path.join(RUTA_IMAGENES, row.get("IMAGEN", ""))
+                    col1, col2 = st.columns([1,2])
+                    # Imagen
+                    foto_path = os.path.join(RUTA_IMAGENES, row.get("IMAGEN",""))
                     if os.path.exists(foto_path) and row.get("IMAGEN"):
-                        cols[0].image(Image.open(foto_path), width=250)
+                        col1.image(Image.open(foto_path), width=250)
                     else:
-                        cols[0].write(f"⚠️ No se encontró la imagen: {row.get('IMAGEN','')}")
-                    cols[1].markdown(f"""
+                        col1.write(f"⚠️ No se encontró la imagen: {row.get('IMAGEN','')}")
+                    # Información
+                    col2.markdown(f"""
                         <div style="background:#f9f9f9;padding:10px;border-radius:10px;">
-                        <p><b>👤 Nombre:</b> {row.get("NOMBRE", "")}</p>
-                        <p><b>🆔 ID:</b> {row.get("ID", "")}</p>
-                        <p><b>🏙 Municipio:</b> {row.get("MUNICIPIO ", "")}</p>
-                        <p><b>🔢 NUNC:</b> {row.get("NUNC", "")}</p>
+                        <p><b>👤 Nombre:</b> {row.get("NOMBRE","")}</p>
+                        <p><b>🆔 ID:</b> {row.get("ID","")}</p>
+                        <p><b>🏙 Municipio:</b> {row.get("MUNICIPIO ","")}</p>
+                        <p><b>🔢 NUNC:</b> {row.get("NUNC","")}</p>
                         </div>
                     """, unsafe_allow_html=True)
 
             # Exportar Excel
-            resultados_export = resultados.drop(columns=["NOMBRE_NORM", "ID_NORM"], errors="ignore")
+            resultados_export = resultados.drop(columns=["NOMBRE_NORM","ID_NORM"], errors="ignore")
             excel_data = exportar_excel(resultados_export)
             st.download_button(
                 label="⬇️ Descargar resultados",
                 data=excel_data,
                 file_name="resultados.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
 # ---------------- BÚSQUEDA POR IMAGEN ----------------
 else:
-    uploaded_file = st.file_uploader("Sube una imagen para buscar coincidencias", type=["jpg", "jpeg", "png"])
+    uploaded_file = st.file_uploader("Sube una imagen para buscar coincidencias", type=["jpg","jpeg","png"])
     if uploaded_file and st.button("Buscar"):
         st.info("🔎 Procesando imagen...")
         img_path = os.path.join(TEMP_DIR, uploaded_file.name)
-        with open(img_path, "wb") as f:
+        with open(img_path,"wb") as f:
             f.write(uploaded_file.getbuffer())
 
         try:
@@ -105,11 +107,11 @@ else:
                 st.success(f"✅ {len(result)} coincidencia(s) encontrada(s)")
                 for idx, row in result.iterrows():
                     with st.expander(f"Imagen: {os.path.basename(row['identity'])}"):
-                        cols = st.columns([1,2])
+                        col1, col2 = st.columns([1,2])
                         foto_path = os.path.join(RUTA_IMAGENES, os.path.basename(row["identity"]))
                         if os.path.exists(foto_path):
-                            cols[0].image(Image.open(foto_path), width=250)
-                        cols[1].markdown(f"""
+                            col1.image(Image.open(foto_path), width=250)
+                        col2.markdown(f"""
                             <div style="background:#f9f9f9;padding:10px;border-radius:10px;">
                             <p><b>Ruta imagen:</b> {row['identity']}</p>
                             <p><b>Distancia:</b> {row['VGG-Face_cosine']:.4f}</p>
@@ -117,5 +119,7 @@ else:
                         """, unsafe_allow_html=True)
         except Exception as e:
             st.error(f"❌ Error al procesar la imagen: {e}")
+
+
 
 
