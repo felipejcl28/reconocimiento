@@ -7,7 +7,7 @@ from io import BytesIO
 from deepface import DeepFace
 
 # ---------------- CONFIG ----------------
-RUTA_EXCEL = os.path.join(os.getcwd(), "personas.xlsx")
+RUTA_EXCEL = os.path.join(os.getcwd(), "informacion.xlsx")
 RUTA_IMAGENES = os.path.join(os.getcwd(), "IMAGENES")
 TEMP_DIR = os.path.join(os.getcwd(), "temp")
 os.makedirs(TEMP_DIR, exist_ok=True)
@@ -119,6 +119,7 @@ else:
                         """, unsafe_allow_html=True)
         except Exception as e:
             st.error(f"❌ Error al procesar la imagen: {e}")
+
 
 
 
