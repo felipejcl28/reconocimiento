@@ -111,17 +111,21 @@ if not resultados.empty:
 
     lista_resultados = []
     for _, row in resultados.iterrows():
-        # Mostrar foto
-        img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
-        if os.path.exists(img_path):
-            st.image(img_path, width=150)
+        # Usamos columnas para organizar foto e info
+        col1, col2 = st.columns([1, 2])
 
-        # Mostrar datos
-        st.markdown(f"**ID:** {row['ID']}")
-        st.markdown(f"**Nombre:** {row['NOMBRE']}")
-        st.markdown(f"**Tipo ID:** {row['TIPO_DE_ID']}")
-        st.markdown(f"**NUNC:** {row['NUNC']}")
+        with col1:
+            img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
+            if os.path.exists(img_path):
+                st.image(img_path, width=180, caption=row["NOMBRE"])
 
+        with col2:
+            st.markdown(f"**🆔 ID:** {row['ID']}")
+            st.markdown(f"**👤 Nombre:** {row['NOMBRE']}")
+            st.markdown(f"**📄 Tipo ID:** {row['TIPO_DE_ID']}")
+            st.markdown(f"**🔑 NUNC:** {row['NUNC']}")
+
+        st.markdown("---")  # Separador elegante entre resultados
         lista_resultados.append(row.to_dict())
 
     # Descargar Excel
@@ -135,6 +139,7 @@ if not resultados.empty:
 
 elif st.session_state.busqueda_realizada:
     st.warning("⚠️ No se encontraron resultados.")
+
 
 
 
