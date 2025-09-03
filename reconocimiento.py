@@ -43,35 +43,7 @@ def exportar_resultados(resultados):
 # INTERFAZ STREAMLIT
 # ==============================
 st.set_page_config(page_title="Búsqueda de Personas", layout="centered")
-
-# CSS personalizado para tarjetas
-st.markdown("""
-    <style>
-    .tarjeta {
-        display: flex;
-        align-items: center;
-        background-color: #f9f9f9;
-        border: 1px solid #ddd;
-        border-radius: 15px;
-        padding: 15px;
-        margin-bottom: 20px;
-        box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-    }
-    .tarjeta img {
-        border-radius: 10px;
-        margin-right: 20px;
-    }
-    .tarjeta-info {
-        font-size: 16px;
-        line-height: 1.6;
-    }
-    .tarjeta-info strong {
-        color: #333;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-st.markdown("<h1 style='text-align: center; color: #2c3e50;'>🔍 Búsqueda de Personas</h1>", unsafe_allow_html=True)
+st.title("🔍 Búsqueda de Personas")
 
 # Cargar datos
 df = cargar_datos()
@@ -139,24 +111,21 @@ if not resultados.empty:
 
     lista_resultados = []
     for _, row in resultados.iterrows():
-        img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
-        if os.path.exists(img_path):
-            img_html = f"<img src='data:image/png;base64,{Image.open(img_path).resize((150,150)).tobytes()}' width='150'>"
-        else:
-            img_html = "<div style='width:150px;height:150px;background:#ddd;border-radius:10px;display:flex;align-items:center;justify-content:center;'>Sin foto</div>"
+        # Usamos columnas para organizar foto e info
+        col1, col2 = st.columns([1, 2])
 
-        tarjeta_html = f"""
-        <div class="tarjeta">
-            <img src="data:image/png;base64,{Image.open(img_path).resize((150,150)).tobytes()}" width="150">
-            <div class="tarjeta-info">
-                <p><strong>🆔 ID:</strong> {row['ID']}</p>
-                <p><strong>👤 Nombre:</strong> {row['NOMBRE']}</p>
-                <p><strong>📄 Tipo ID:</strong> {row['TIPO_DE_ID']}</p>
-                <p><strong>🔑 NUNC:</strong> {row['NUNC']}</p>
-            </div>
-        </div>
-        """
-        st.markdown(tarjeta_html, unsafe_allow_html=True)
+        with col1:
+            img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
+            if os.path.exists(img_path):
+                st.image(img_path, width=180, caption=row["NOMBRE"])
+
+        with col2:
+            st.markdown(f"**🆔 ID:** {row['ID']}")
+            st.markdown(f"**👤 Nombre:** {row['NOMBRE']}")
+            st.markdown(f"**📄 Tipo ID:** {row['TIPO_DE_ID']}")
+            st.markdown(f"**🔑 NUNC:** {row['NUNC']}")
+
+        st.markdown("---")  # Separador elegante entre resultados
         lista_resultados.append(row.to_dict())
 
     # Descargar Excel
