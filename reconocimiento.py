@@ -55,7 +55,7 @@ resultados = pd.DataFrame()
 # ==========================
 if modo_busqueda == "Por nombre":
     nombre = st.text_input("Escribe el nombre (o parte del nombre) a buscar:")
-    if st.button("Buscar"):
+    if st.button("Buscar", key="buscar_nombre"):
         if nombre:
             nombre_norm = normalizar_texto(nombre)
             resultados = df[df["nombre_norm"].str.contains(nombre_norm, na=False)]
@@ -67,7 +67,7 @@ if modo_busqueda == "Por nombre":
 # ==========================
 elif modo_busqueda == "Por ID":
     id_buscar = st.text_input("Escribe el ID a buscar:")
-    if st.button("Buscar"):
+    if st.button("Buscar", key="buscar_id"):
         if id_buscar:
             resultados = df[df["ID"].astype(str).str.contains(id_buscar)]
         else:
@@ -78,7 +78,7 @@ elif modo_busqueda == "Por ID":
 # ==========================
 elif modo_busqueda == "Por imagen":
     imagen_subida = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
-    if imagen_subida and st.button("Buscar"):
+    if imagen_subida and st.button("Buscar", key="buscar_imagen"):
         try:
             img_bytes = Image.open(imagen_subida)
             st.image(img_bytes, caption="📷 Imagen cargada", use_column_width=False)
@@ -111,8 +111,12 @@ if not resultados.empty:
     # ✅ Botón para exportar a Excel
     exportar_resultados(resultados)
 else:
-    if st.button("Buscar"):
+    # Solo mostrar aviso si se hizo clic en algún botón
+    if (modo_busqueda == "Por nombre" and st.session_state.get("buscar_nombre")) \
+       or (modo_busqueda == "Por ID" and st.session_state.get("buscar_id")) \
+       or (modo_busqueda == "Por imagen" and st.session_state.get("buscar_imagen")):
         st.warning("⚠️ No se encontraron coincidencias.")
+
 
 
 
