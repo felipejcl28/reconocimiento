@@ -47,6 +47,7 @@ if opcion == "Por ID":
                 st.markdown(f"**ID:** {row['ID']}")
                 st.markdown(f"**Nombre:** {row['NOMBRE']}")
                 st.markdown(f"**Tipo ID:** {row['TIPO DE ID']}")
+                st.markdown(f"**NUNC:** {row['NUNC']}")
         else:
             st.warning("⚠️ No se encontró ninguna persona con ese ID.")
 
@@ -66,6 +67,7 @@ elif opcion == "Por Nombre":
                 st.markdown(f"**ID:** {row['ID']}")
                 st.markdown(f"**Nombre:** {row['NOMBRE']}")
                 st.markdown(f"**Tipo ID:** {row['TIPO DE ID']}")
+                st.markdown(f"**NUNC:** {row['NUNC']}")
         else:
             st.warning("⚠️ No se encontró ninguna persona con ese nombre.")
 
@@ -93,10 +95,13 @@ elif opcion == "Por Imagen":
                 st.markdown(f"**ID:** {encontrado['ID']}")
                 st.markdown(f"**Nombre:** {encontrado['NOMBRE']}")
                 st.markdown(f"**Tipo ID:** {encontrado['TIPO DE ID']}")
+                st.markdown(f"**NUNC:** {encontrado['NUNC']}")
             else:
                 st.warning("⚠️ No se encontró ninguna coincidencia.")
         except Exception as e:
             st.error(f"❌ Error en el reconocimiento facial: {e}")
+
+
 
 
 
