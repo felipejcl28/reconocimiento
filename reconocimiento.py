@@ -1,22 +1,16 @@
 import streamlit as st
 import pandas as pd
-from PIL import Image
 import os
 import unicodedata
-from io import BytesIO
+from PIL import Image
 from deepface import DeepFace
 
-# ==============================
-# RUTAS DEL EXCEL E IMÁGENES
-# ==============================
+# 📂 Rutas de archivos
 RUTA_EXCEL = os.path.join(os.getcwd(), "informacion.xlsx")
 RUTA_IMAGENES = os.path.join(os.getcwd(), "IMAGENES")
 
-# ==============================
-# FUNCIONES AUXILIARES
-# ==============================
+# 🔤 Normalizar texto (para búsquedas sin acentos ni mayúsculas)
 def normalizar_texto(texto: str) -> str:
-    """Convierte texto a minúsculas sin tildes ni caracteres especiales."""
     if not isinstance(texto, str):
         return ""
     texto = texto.strip().lower()
@@ -24,108 +18,87 @@ def normalizar_texto(texto: str) -> str:
     texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
     return texto
 
+# 📑 Cargar datos de Excel
 @st.cache_data
 def cargar_datos():
-    """Carga el Excel y normaliza nombres de columnas a MAYÚSCULAS."""
-    try:
-        df = pd.read_excel(RUTA_EXCEL)
-        df.columns = [c.upper() for c in df.columns]  # ✅ columnas en mayúsculas
-        return df
-    except Exception as e:
-        st.error(f"❌ Error cargando Excel: {e}")
-        return pd.DataFrame()
-
-def mostrar_resultados(resultados, df):
-    """Muestra los resultados con imagen y datos."""
-    if resultados.empty:
-        st.warning("⚠️ No se encontraron coincidencias.")
-    else:
-        for _, row in resultados.iterrows():
-            ruta_img = os.path.join(RUTA_IMAGENES, str(row["IMAGEN"]))
-            if os.path.exists(ruta_img):
-                st.image(ruta_img, width=150)
-            else:
-                st.warning(f"⚠️ Imagen no encontrada: {ruta_img}")
-            st.write(f"**ID:** {row['ID']}")
-            st.write(f"**Nombre:** {row['NOMBRE']}")
-            st.write(f"**Tipo ID:** {row['TIPO DE ID']}")
-            st.write(f"**Municipio:** {row['MUNICIPIO']}")
-            st.write(f"**NUNC:** {row['NUNC']}")
-            st.markdown("---")
-
-# ==============================
-# INTERFAZ STREAMLIT
-# ==============================
-st.title("🔎 Búsqueda de personas en Excel con reconocimiento facial")
+    df = pd.read_excel(RUTA_EXCEL, dtype=str)
+    df = df.fillna("")
+    return df
 
 df = cargar_datos()
 
-if not df.empty:
-    opcion = st.radio("Elige cómo buscar:", ["Por nombre", "Por ID", "Por imagen"])
+st.title("🔎 Búsqueda de Personas")
 
-    # ------------------------------
-    # BÚSQUEDA POR NOMBRE (parcial)
-    # ------------------------------
-    if opcion == "Por nombre":
-        nombre_buscar = st.text_input("Escribe el nombre (o parte del nombre) a buscar:")
+# 📌 Opción de búsqueda
+opcion = st.radio("Elige cómo deseas buscar:", ["Por ID", "Por Nombre", "Por Imagen"])
 
-        if st.button("Buscar"):
-            if nombre_buscar.strip() == "":
-                st.warning("⚠️ Por favor escribe un nombre.")
+# =====================
+# 🔍 Búsqueda por ID
+# =====================
+if opcion == "Por ID":
+    id_buscar = st.text_input("Escribe el ID a buscar:")
+    if st.button("Buscar por ID"):
+        resultados = df[df["ID"] == id_buscar.strip()]
+        if not resultados.empty:
+            for _, row in resultados.iterrows():
+                img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
+                if os.path.exists(img_path):
+                    st.image(Image.open(img_path), width=150)
+                st.markdown(f"**ID:** {row['ID']}")
+                st.markdown(f"**Nombre:** {row['NOMBRE']}")
+                st.markdown(f"**Tipo ID:** {row['TIPO DE ID']}")
+        else:
+            st.warning("⚠️ No se encontró ninguna persona con ese ID.")
+
+# =====================
+# 🔍 Búsqueda por Nombre
+# =====================
+elif opcion == "Por Nombre":
+    nombre_buscar = st.text_input("Escribe el nombre (o parte del nombre) a buscar:")
+    if st.button("Buscar por Nombre"):
+        nombre_normalizado = normalizar_texto(nombre_buscar)
+        resultados = df[df["NOMBRE"].apply(lambda x: nombre_normalizado in normalizar_texto(x))]
+        if not resultados.empty:
+            for _, row in resultados.iterrows():
+                img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
+                if os.path.exists(img_path):
+                    st.image(Image.open(img_path), width=150)
+                st.markdown(f"**ID:** {row['ID']}")
+                st.markdown(f"**Nombre:** {row['NOMBRE']}")
+                st.markdown(f"**Tipo ID:** {row['TIPO DE ID']}")
+        else:
+            st.warning("⚠️ No se encontró ninguna persona con ese nombre.")
+
+# =====================
+# 🖼️ Búsqueda por Imagen
+# =====================
+elif opcion == "Por Imagen":
+    archivo_imagen = st.file_uploader("Sube una imagen para buscar coincidencias:", type=["jpg", "jpeg", "png"])
+    if archivo_imagen is not None:
+        with open("temp.jpg", "wb") as f:
+            f.write(archivo_imagen.getbuffer())
+        try:
+            encontrado = None
+            for _, row in df.iterrows():
+                img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
+                if os.path.exists(img_path):
+                    result = DeepFace.verify("temp.jpg", img_path, enforce_detection=False)
+                    if result["verified"]:
+                        encontrado = row
+                        break
+            if encontrado is not None:
+                st.success("✅ Persona encontrada:")
+                img_path = os.path.join(RUTA_IMAGENES, encontrado["IMAGEN"])
+                st.image(Image.open(img_path), width=150)
+                st.markdown(f"**ID:** {encontrado['ID']}")
+                st.markdown(f"**Nombre:** {encontrado['NOMBRE']}")
+                st.markdown(f"**Tipo ID:** {encontrado['TIPO DE ID']}")
             else:
-                df["NOMBRE_NORM"] = df["NOMBRE"].apply(normalizar_texto)
-                nombre_norm = normalizar_texto(nombre_buscar)
+                st.warning("⚠️ No se encontró ninguna coincidencia.")
+        except Exception as e:
+            st.error(f"❌ Error en el reconocimiento facial: {e}")
 
-                # ✅ búsqueda parcial
-                resultados = df[df["NOMBRE_NORM"].str.contains(nombre_norm, na=False)]
-                mostrar_resultados(resultados, df)
 
-    # ------------------------------
-    # BÚSQUEDA POR ID
-    # ------------------------------
-    elif opcion == "Por ID":
-        id_buscar = st.text_input("Escribe el ID a buscar:")
-
-        if st.button("Buscar"):
-            if id_buscar.strip() == "":
-                st.warning("⚠️ Por favor escribe un ID.")
-            else:
-                resultados = df[df["ID"].astype(str).str.contains(id_buscar.strip())]
-                mostrar_resultados(resultados, df)
-
-    # ------------------------------
-    # BÚSQUEDA POR IMAGEN
-    # ------------------------------
-    elif opcion == "Por imagen":
-        archivo = st.file_uploader("Sube una imagen para buscar coincidencias", type=["jpg", "jpeg", "png"])
-
-        if archivo is not None:
-            img_bytes = archivo.read()
-            img = Image.open(BytesIO(img_bytes))
-            st.image(img, caption="📷 Imagen cargada", width=200)
-
-            if st.button("Buscar"):
-                try:
-                    resultados = []
-                    for _, row in df.iterrows():
-                        ruta_img = os.path.join(RUTA_IMAGENES, str(row["IMAGEN"]))
-                        if os.path.exists(ruta_img):
-                            try:
-                                # Comparación con DeepFace
-                                resp = DeepFace.verify(img_bytes, ruta_img, enforce_detection=False)
-                                if resp["verified"]:
-                                    resultados.append(row)
-                            except Exception as e:
-                                st.error(f"Error comparando con {ruta_img}: {e}")
-
-                    if resultados:
-                        resultados_df = pd.DataFrame(resultados)
-                        mostrar_resultados(resultados_df, df)
-                    else:
-                        st.warning("⚠️ No se encontraron coincidencias.")
-
-                except Exception as e:
-                    st.error(f"❌ Error en la búsqueda por imagen: {e}")
 
 
 
