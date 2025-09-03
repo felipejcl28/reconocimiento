@@ -96,7 +96,7 @@ if not resultados.empty:
         st.image(os.path.join(RUTA_IMAGENES, f"{row['ID']}.jpg"), width=150)
         st.markdown(f"**ID:** {row['ID']}")
         st.markdown(f"**Nombre:** {row['NOMBRE']}")
-        st.markdown(f"**Tipo ID:** {row['TIPO_ID']}")
+        st.markdown(f"**Tipo ID:** {row['TIPO_DE_ID']}") 
         st.markdown(f"**NUNC:** {row['NUNC']}")
         st.markdown("---")
 
@@ -108,6 +108,7 @@ if not resultados.empty:
         file_name="resultados.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
 
 
 
