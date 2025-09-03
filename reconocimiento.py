@@ -35,7 +35,7 @@ opcion = st.radio("Elige cómo deseas buscar:", ["Por ID", "Por Nombre", "Por Im
 # =====================
 # 🔍 Búsqueda por ID
 # =====================
-if opcion == "Por ID":
+if opcion == "POR IDENTIFICACION":
     id_buscar = st.text_input("Escribe el ID a buscar:")
     if st.button("Buscar por ID"):
         resultados = df[df["ID"] == id_buscar.strip()]
@@ -54,7 +54,7 @@ if opcion == "Por ID":
 # =====================
 # 🔍 Búsqueda por Nombre
 # =====================
-elif opcion == "Por Nombre":
+elif opcion == "POR NOMBRE":
     nombre_buscar = st.text_input("Escribe el nombre (o parte del nombre) a buscar:")
     if st.button("Buscar por Nombre"):
         nombre_normalizado = normalizar_texto(nombre_buscar)
@@ -74,7 +74,7 @@ elif opcion == "Por Nombre":
 # =====================
 # 🖼️ Búsqueda por Imagen
 # =====================
-elif opcion == "Por Imagen":
+elif opcion == "POR FOTO":
     archivo_imagen = st.file_uploader("Sube una imagen para buscar coincidencias:", type=["jpg", "jpeg", "png"])
     if archivo_imagen is not None:
         with open("temp.jpg", "wb") as f:
@@ -100,6 +100,7 @@ elif opcion == "Por Imagen":
                 st.warning("⚠️ No se encontró ninguna coincidencia.")
         except Exception as e:
             st.error(f"❌ Error en el reconocimiento facial: {e}")
+
 
 
 
