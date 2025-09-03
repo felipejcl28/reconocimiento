@@ -1,108 +1,115 @@
 import streamlit as st
 import pandas as pd
 from PIL import Image
-from deepface import DeepFace
 import os
+import unicodedata
+from io import BytesIO
+from deepface import DeepFace
 
-# Rutas relativas
+# ============================
+# Configuración de rutas
+# ============================
 RUTA_EXCEL = os.path.join(os.getcwd(), "informacion.xlsx")
 RUTA_IMAGENES = os.path.join(os.getcwd(), "IMAGENES")
 
-# Cargar datos
-df = pd.read_excel(RUTA_EXCEL)
+# ============================
+# Función para normalizar texto
+# ============================
+def normalizar_texto(texto: str) -> str:
+    if not isinstance(texto, str):
+        return ""
+    texto = texto.strip().lower()
+    texto = unicodedata.normalize("NFD", texto)
+    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
+    return texto
 
-st.title("Búsqueda de personas - Galería con Carrusel (Seguro)")
+# ============================
+# Cargar datos del Excel
+# ============================
+@st.cache_data
+def cargar_datos():
+    try:
+        return pd.read_excel(RUTA_EXCEL)
+    except Exception as e:
+        st.error(f"❌ Error cargando Excel: {e}")
+        return pd.DataFrame()
 
-# Contenedor fijo para los resultados
-contenedor_resultados = st.container()
+df = cargar_datos()
 
-# Selección de búsqueda
-opcion = st.radio("Buscar por:", ("Nombre", "Imagen"))
+# ============================
+# Interfaz de usuario
+# ============================
+st.title("🔎 Reconocimiento y Búsqueda de Personas")
 
-def mostrar_carrusel(resultados, columnas_por_fila=3):
-    """Muestra resultados en filas con scroll horizontal"""
-    if resultados.empty:
-        st.error("No se encontraron resultados")
-        return
+opcion = st.radio("Elige cómo buscar:", ["Por nombre", "Por imagen"])
 
-    # Estilo CSS para scroll horizontal
-    st.markdown(
-        """
-        <style>
-        .carrusel {
-            display: flex;
-            overflow-x: auto;
-            gap: 20px;
-            padding: 10px;
-        }
-        .card {
-            flex: 0 0 auto;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            padding: 10px;
-            background: #fafafa;
-            min-width: 220px;
-            max-width: 220px;
-            text-align: center;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+# ============================
+# Búsqueda por nombre
+# ============================
+if opcion == "Por nombre":
+    nombre = st.text_input("Escribe el nombre a buscar:")
+    if nombre:
+        nombre_norm = normalizar_texto(nombre)
+        df["nombre_norm"] = df["Nombre"].apply(normalizar_texto)
 
-    # HTML dinámico para la galería
-    html = '<div class="carrusel">'
-    for _, row in resultados.iterrows():
-        html += '<div class="card">'
+        resultados = df[df["nombre_norm"].str.contains(nombre_norm, na=False)]
+
+        if not resultados.empty:
+            st.success("✅ Coincidencias encontradas:")
+            st.dataframe(resultados)
+
+            for _, row in resultados.iterrows():
+                ruta_img = os.path.join(RUTA_IMAGENES, row["Imagen"])
+                if os.path.exists(ruta_img):
+                    st.image(ruta_img, caption=row["Nombre"], width=200)
+        else:
+            st.warning("⚠️ No se encontraron coincidencias.")
+
+# ============================
+# Búsqueda por imagen
+# ============================
+if opcion == "Por imagen":
+    archivo = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
+
+    if archivo is not None:
+        imagen = Image.open(archivo)
+        st.image(imagen, caption="Imagen cargada", width=250)
+
+        # Guardar temporalmente
+        img_bytes = BytesIO()
+        imagen.save(img_bytes, format="PNG")
+        img_path = "temp.png"
+        with open(img_path, "wb") as f:
+            f.write(img_bytes.getvalue())
+
         try:
-            img_path = os.path.join(RUTA_IMAGENES, row['Imagen'])
-            st.image(Image.open(img_path), width=200)
-        except:
-            st.info("Imagen no encontrada")
-        # Mostramos datos como texto
-        for col in row.index:
-            html += f"<p><b>{col}:</b> {row[col]}</p>"
-        html += "</div>"
-    html += "</div>"
+            resultados = DeepFace.find(
+                img_path=img_path,
+                db_path=RUTA_IMAGENES,
+                model_name="Facenet",  # ✅ más liviano que VGGFace
+                enforce_detection=False
+            )
 
-    st.markdown(html, unsafe_allow_html=True)
+            if len(resultados) > 0 and not resultados[0].empty:
+                st.success("✅ Coincidencias encontradas:")
 
-if opcion == "Nombre":
-    nombre_buscar = st.text_input("Ingrese el nombre completo:")
-    if st.button("Buscar"):
-        with contenedor_resultados:
-            contenedor_resultados.empty()  # limpiar antes de dibujar
-            if nombre_buscar.strip() == "":
-                st.warning("Por favor ingresa un nombre")
+                for i, row in resultados[0].iterrows():
+                    ruta_img = row["identity"]
+                    st.image(ruta_img, caption=os.path.basename(ruta_img), width=200)
+
+                    # Buscar información en el Excel
+                    persona = os.path.basename(ruta_img)
+                    info = df[df["Imagen"] == persona]
+                    if not info.empty:
+                        st.dataframe(info)
+
             else:
-                resultados = df[df["Nombre"].str.lower() == nombre_buscar.strip().lower()]
-                mostrar_carrusel(resultados)
+                st.warning("⚠️ No se encontraron coincidencias en la base de imágenes.")
 
-else:  # Búsqueda por imagen
-    uploaded_file = st.file_uploader("Sube una imagen")
-    if uploaded_file:
-        with contenedor_resultados:
-            contenedor_resultados.empty()
-            try:
-                img = Image.open(uploaded_file)
-                img.save("temp.jpg")
+        except Exception as e:
+            st.error(f"❌ Error en el reconocimiento: {e}")
 
-                coincidencias = []
-                for _, row in df.iterrows():
-                    try:
-                        persona_img_path = os.path.join(RUTA_IMAGENES, row['Imagen'])
-                        res = DeepFace.verify("temp.jpg", persona_img_path, enforce_detection=False)
-                        if res["verified"]:
-                            coincidencias.append(row)
-                    except:
-                        continue
 
-                if coincidencias:
-                    mostrar_carrusel(pd.DataFrame(coincidencias))
-                else:
-                    st.error("No se encontraron coincidencias")
-            except Exception as e:
-                st.error(f"Ocurrió un error: {e}")
 
 
 
