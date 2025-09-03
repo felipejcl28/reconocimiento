@@ -49,10 +49,14 @@ st.title("🔍 Búsqueda de Personas")
 df = cargar_datos()
 df["NOMBRE_NORM"] = df["NOMBRE"].apply(normalizar_texto)
 
+# Control de búsqueda
+if "busqueda_realizada" not in st.session_state:
+    st.session_state.busqueda_realizada = False
+
 # Opciones de búsqueda
 opcion = st.radio("Elige cómo buscar:", ["Por nombre", "Por ID", "Por imagen"])
 
-resultados = []
+resultados = pd.DataFrame()
 
 # ==============================
 # BÚSQUEDA POR NOMBRE
@@ -62,6 +66,7 @@ if opcion == "Por nombre":
     if st.button("Buscar", key="buscar_nombre"):
         nombre_norm = normalizar_texto(nombre)
         resultados = df[df["NOMBRE_NORM"].str.contains(nombre_norm, na=False)]
+        st.session_state.busqueda_realizada = True
 
 # ==============================
 # BÚSQUEDA POR ID
@@ -70,6 +75,7 @@ elif opcion == "Por ID":
     id_buscar = st.text_input("Escribe el ID a buscar:")
     if st.button("Buscar", key="buscar_id"):
         resultados = df[df["ID"] == id_buscar]
+        st.session_state.busqueda_realizada = True
 
 # ==============================
 # BÚSQUEDA POR IMAGEN
@@ -81,20 +87,26 @@ elif opcion == "Por imagen":
         with open(img_temp, "wb") as f:
             f.write(imagen_subida.getbuffer())
 
+        encontrado = False
         for _, row in df.iterrows():
             img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
             try:
                 result = DeepFace.verify(img1_path=img_temp, img2_path=img_path, enforce_detection=False)
                 if result["verified"]:
                     resultados = pd.DataFrame([row])
+                    encontrado = True
                     break
             except Exception as e:
                 st.error(f"Error comparando con {img_path}: {e}")
 
+        st.session_state.busqueda_realizada = True
+        if not encontrado:
+            resultados = pd.DataFrame()  # vacío para mostrar advertencia
+
 # ==============================
 # MOSTRAR RESULTADOS
 # ==============================
-if not isinstance(resultados, list) and not resultados.empty:
+if not resultados.empty:
     st.subheader("Resultados encontrados:")
 
     lista_resultados = []
@@ -121,8 +133,9 @@ if not isinstance(resultados, list) and not resultados.empty:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
-elif isinstance(resultados, pd.DataFrame) and resultados.empty:
-    st.warning("No se encontraron resultados.")
+elif st.session_state.busqueda_realizada:
+    st.warning("⚠️ No se encontraron resultados.")
+
 
 
 
