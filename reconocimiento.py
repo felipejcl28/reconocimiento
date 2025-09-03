@@ -42,8 +42,38 @@ def exportar_resultados(resultados):
 # ==============================
 # INTERFAZ STREAMLIT
 # ==============================
-st.set_page_config(page_title="Búsqueda de Personas", layout="centered")
-st.title("🔍 Búsqueda de Personas")
+st.set_page_config(page_title="🔍 Búsqueda de Personas", layout="wide")
+
+# CSS personalizado
+st.markdown(
+    """
+    <style>
+    .titulo {
+        text-align: center;
+        font-size: 36px;
+        color: #2C3E50;
+        font-weight: bold;
+        margin-bottom: 20px;
+    }
+    .tarjeta {
+        padding: 15px;
+        border-radius: 12px;
+        background-color: #F8F9F9;
+        margin-bottom: 15px;
+        box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+    }
+    .tarjeta p {
+        margin: 5px 0;
+        font-size: 16px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# Título
+st.markdown('<p class="titulo">🔍 Búsqueda de Personas</p>', unsafe_allow_html=True)
+st.write("---")
 
 # Cargar datos
 df = cargar_datos()
@@ -54,7 +84,8 @@ if "busqueda_realizada" not in st.session_state:
     st.session_state.busqueda_realizada = False
 
 # Opciones de búsqueda
-opcion = st.radio("Elige cómo buscar:", ["Por nombre", "Por ID", "Por imagen"])
+st.subheader("📌 Selecciona el modo de búsqueda")
+opcion = st.radio("", ["Por nombre", "Por ID", "Por imagen"])
 
 resultados = pd.DataFrame()
 
@@ -62,7 +93,7 @@ resultados = pd.DataFrame()
 # BÚSQUEDA POR NOMBRE
 # ==============================
 if opcion == "Por nombre":
-    nombre = st.text_input("Escribe el nombre (o parte del nombre) a buscar:")
+    nombre = st.text_input("✍️ Escribe el nombre (o parte del nombre) a buscar:")
     if st.button("Buscar", key="buscar_nombre"):
         nombre_norm = normalizar_texto(nombre)
         resultados = df[df["NOMBRE_NORM"].str.contains(nombre_norm, na=False)]
@@ -72,7 +103,7 @@ if opcion == "Por nombre":
 # BÚSQUEDA POR ID
 # ==============================
 elif opcion == "Por ID":
-    id_buscar = st.text_input("Escribe el ID a buscar:")
+    id_buscar = st.text_input("🆔 Escribe el ID a buscar:")
     if st.button("Buscar", key="buscar_id"):
         resultados = df[df["ID"] == id_buscar]
         st.session_state.busqueda_realizada = True
@@ -81,7 +112,7 @@ elif opcion == "Por ID":
 # BÚSQUEDA POR IMAGEN
 # ==============================
 elif opcion == "Por imagen":
-    imagen_subida = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
+    imagen_subida = st.file_uploader("📷 Sube una imagen", type=["jpg", "jpeg", "png"])
     if st.button("Buscar", key="buscar_imagen") and imagen_subida:
         img_temp = os.path.join("temp.jpg")
         with open(img_temp, "wb") as f:
@@ -104,24 +135,31 @@ elif opcion == "Por imagen":
             resultados = pd.DataFrame()  # vacío para mostrar advertencia
 
 # ==============================
-# MOSTRAR RESULTADOS
+# MOSTRAR RESULTADOS (con estilo)
 # ==============================
 if not resultados.empty:
-    st.subheader("Resultados encontrados:")
+    st.subheader("✅ Resultados encontrados")
 
     lista_resultados = []
     for _, row in resultados.iterrows():
-        # Mostrar foto
-        img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
-        if os.path.exists(img_path):
-            st.image(img_path, width=150)
-
-        # Mostrar datos
-        st.markdown(f"**ID:** {row['ID']}")
-        st.markdown(f"**Nombre:** {row['NOMBRE']}")
-        st.markdown(f"**Tipo ID:** {row['TIPO_DE_ID']}")
-        st.markdown(f"**NUNC:** {row['NUNC']}")
-
+        with st.container():
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
+                if os.path.exists(img_path):
+                    st.image(img_path, width=200)
+            with col2:
+                st.markdown(
+                    f"""
+                    <div class="tarjeta">
+                        <p><b>ID:</b> {row['ID']}</p>
+                        <p><b>Nombre:</b> {row['NOMBRE']}</p>
+                        <p><b>Tipo ID:</b> {row['TIPO_DE_ID']}</p>
+                        <p><b>NUNC:</b> {row['NUNC']}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
         lista_resultados.append(row.to_dict())
 
     # Descargar Excel
@@ -135,6 +173,7 @@ if not resultados.empty:
 
 elif st.session_state.busqueda_realizada:
     st.warning("⚠️ No se encontraron resultados.")
+
 
 
 
