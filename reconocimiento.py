@@ -43,7 +43,7 @@ def exportar_resultados(resultados):
 # INTERFAZ STREAMLIT
 # ==============================
 st.set_page_config(page_title="Búsqueda de Personas", layout="centered")
-st.title("🔍 Búsqueda de Personas")
+st.title("🔍 Búsqueda")
 
 # Cargar datos
 df = cargar_datos()
@@ -54,7 +54,7 @@ if "busqueda_realizada" not in st.session_state:
     st.session_state.busqueda_realizada = False
 
 # Opciones de búsqueda
-opcion = st.radio("Elige cómo buscar:", ["Por nombre", "Por ID", "Por imagen"])
+opcion = st.radio("Elige cómo buscar:", ["Por Nombre", "Por Identificación", "Por Foto"])
 
 resultados = pd.DataFrame()
 
@@ -135,6 +135,7 @@ if not resultados.empty:
 
 elif st.session_state.busqueda_realizada:
     st.warning("⚠️ No se encontraron resultados.")
+
 
 
 
