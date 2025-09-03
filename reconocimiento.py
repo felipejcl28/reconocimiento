@@ -18,7 +18,6 @@ def normalizar_texto(texto: str) -> str:
     texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
     return texto
 
-# 📑 Cargar datos de Excel
 @st.cache_data
 def cargar_datos():
     df = pd.read_excel(RUTA_EXCEL, dtype=str)
@@ -30,7 +29,7 @@ df = cargar_datos()
 st.title("🔎 Búsqueda de Personas")
 
 # 📌 Opción de búsqueda
-opcion = st.radio("Elige cómo deseas buscar:", ["Por ID", "Por Nombre", "Por Imagen"])
+opcion = st.radio("Elige cómo deseas buscar:", ["POR IDENTIFICACION", "POR NOMBRE", "POR FOTO"])
 
 # =====================
 # 🔍 Búsqueda por ID
@@ -100,6 +99,7 @@ elif opcion == "POR FOTO":
                 st.warning("⚠️ No se encontró ninguna coincidencia.")
         except Exception as e:
             st.error(f"❌ Error en el reconocimiento facial: {e}")
+
 
 
 
