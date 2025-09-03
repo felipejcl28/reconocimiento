@@ -1,60 +1,46 @@
 import streamlit as st
 import pandas as pd
-import unicodedata
 import os
-from deepface import DeepFace
 from PIL import Image
-from io import BytesIO
+from deepface import DeepFace
+import unicodedata
+import io
 
-# ==============================
-# CONFIGURACIÓN DE RUTAS
-# ==============================
-RUTA_EXCEL = os.path.join(os.getcwd(), "informacion.xlsx")
-RUTA_IMAGENES = os.path.join(os.getcwd(), "IMAGENES")
+# Configuración inicial
+st.set_page_config(page_title="Búsqueda de Personas", page_icon="🔍", layout="wide")
 
-# ==============================
-# FUNCIONES AUXILIARES
-# ==============================
-def normalizar_texto(texto: str) -> str:
-    """Normaliza texto: minúsculas, sin tildes ni espacios extra"""
-    if not isinstance(texto, str):
-        return ""
-    texto = texto.strip().lower()
-    texto = unicodedata.normalize("NFD", texto)
-    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
-    return texto
-
-def cargar_datos():
-    """Carga el Excel y normaliza nombres de columnas"""
-    df = pd.read_excel(RUTA_EXCEL, dtype=str)
-    df = df.rename(columns=lambda x: x.strip().upper().replace(" ", "_"))
-    return df
-
-def exportar_resultados(resultados):
-    """Exporta resultados encontrados a Excel descargable"""
-    output = BytesIO()
-    df_resultados = pd.DataFrame(resultados)
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df_resultados.to_excel(writer, index=False, sheet_name="Resultados")
-    output.seek(0)
-    return output
-
-# ==============================
-# INTERFAZ STREAMLIT
-# ==============================
-st.set_page_config(page_title="🔍 Búsqueda de Personas", layout="wide")
-
-# CSS personalizado
+# ===================== ESTILOS =====================
 st.markdown(
     """
     <style>
-    .titulo {
+    /* Banner fijo */
+    .banner {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background: linear-gradient(90deg, #2C3E50, #34495E);
+        color: white;
         text-align: center;
-        font-size: 36px;
-        color: #2C3E50;
+        padding: 15px 0;
+        font-size: 28px;
         font-weight: bold;
-        margin-bottom: 20px;
+        z-index: 1000;
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
     }
+
+    /* Espaciador para que el contenido no quede oculto detrás del banner */
+    .espaciador {
+        margin-top: 80px;
+    }
+
+    /* Contenedor centrado */
+    .contenedor {
+        max-width: 900px;
+        margin: auto;
+    }
+
+    /* Tarjetas para mostrar resultados */
     .tarjeta {
         padding: 15px;
         border-radius: 12px;
@@ -71,108 +57,112 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Título
-st.markdown('<p class="titulo">🔍 Búsqueda de Personas</p>', unsafe_allow_html=True)
-st.write("---")
+# ===================== BANNER =====================
+st.markdown('<div class="banner">🔍 Búsqueda de Personas</div>', unsafe_allow_html=True)
+st.markdown('<div class="espaciador"></div>', unsafe_allow_html=True)
+st.markdown('<div class="contenedor">', unsafe_allow_html=True)
 
-# Cargar datos
+# ===================== RUTAS =====================
+RUTA_EXCEL = os.path.join(os.getcwd(), "informacion.xlsx")
+RUTA_IMAGENES = os.path.join(os.getcwd(), "IMAGENES")
+
+# ===================== FUNCIONES =====================
+def normalizar_texto(texto: str) -> str:
+    if not isinstance(texto, str):
+        return ""
+    texto = texto.strip().lower()
+    texto = unicodedata.normalize("NFD", texto)
+    return "".join(c for c in texto if unicodedata.category(c) != "Mn")
+
+# ===================== CARGAR EXCEL =====================
+@st.cache_data
+def cargar_datos():
+    return pd.read_excel(RUTA_EXCEL)
+
 df = cargar_datos()
-df["NOMBRE_NORM"] = df["NOMBRE"].apply(normalizar_texto)
 
-# Control de búsqueda
-if "busqueda_realizada" not in st.session_state:
-    st.session_state.busqueda_realizada = False
-
-# Opciones de búsqueda
-st.subheader("📌 Selecciona el modo de búsqueda")
-opcion = st.radio("", ["Por nombre", "Por ID", "Por imagen"])
+# ===================== OPCIONES DE BÚSQUEDA =====================
+opcion = st.radio("Selecciona el método de búsqueda:", ["Por Nombre", "Por ID", "Por Imagen"])
 
 resultados = pd.DataFrame()
 
-# ==============================
-# BÚSQUEDA POR NOMBRE
-# ==============================
-if opcion == "Por nombre":
-    nombre = st.text_input("✍️ Escribe el nombre (o parte del nombre) a buscar:")
-    if st.button("Buscar", key="buscar_nombre"):
-        nombre_norm = normalizar_texto(nombre)
-        resultados = df[df["NOMBRE_NORM"].str.contains(nombre_norm, na=False)]
-        st.session_state.busqueda_realizada = True
+# ----------------- BÚSQUEDA POR NOMBRE -----------------
+if opcion == "Por Nombre":
+    nombre_busqueda = st.text_input("Ingresa el nombre (o parte del nombre):")
+    if st.button("Buscar"):
+        if nombre_busqueda.strip() == "":
+            st.warning("⚠️ Por favor ingresa un nombre válido.")
+        else:
+            nombre_normalizado = normalizar_texto(nombre_busqueda)
+            df["Nombre_normalizado"] = df["Nombre"].apply(normalizar_texto)
+            resultados = df[df["Nombre_normalizado"].str.contains(nombre_normalizado, na=False, case=False)]
 
-# ==============================
-# BÚSQUEDA POR ID
-# ==============================
+# ----------------- BÚSQUEDA POR ID -----------------
 elif opcion == "Por ID":
-    id_buscar = st.text_input("🆔 Escribe el ID a buscar:")
-    if st.button("Buscar", key="buscar_id"):
-        resultados = df[df["ID"] == id_buscar]
-        st.session_state.busqueda_realizada = True
+    id_busqueda = st.text_input("Ingresa el ID:")
+    if st.button("Buscar"):
+        if id_busqueda.strip() == "":
+            st.warning("⚠️ Por favor ingresa un ID válido.")
+        else:
+            resultados = df[df["ID"].astype(str) == id_busqueda.strip()]
 
-# ==============================
-# BÚSQUEDA POR IMAGEN
-# ==============================
-elif opcion == "Por imagen":
-    imagen_subida = st.file_uploader("📷 Sube una imagen", type=["jpg", "jpeg", "png"])
-    if st.button("Buscar", key="buscar_imagen") and imagen_subida:
-        img_temp = os.path.join("temp.jpg")
-        with open(img_temp, "wb") as f:
-            f.write(imagen_subida.getbuffer())
-
-        encontrado = False
-        for _, row in df.iterrows():
-            img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
+# ----------------- BÚSQUEDA POR IMAGEN -----------------
+elif opcion == "Por Imagen":
+    imagen_cargada = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
+    if imagen_cargada is not None:
+        if st.button("Buscar"):
             try:
-                result = DeepFace.verify(img1_path=img_temp, img2_path=img_path, enforce_detection=False)
-                if result["verified"]:
-                    resultados = pd.DataFrame([row])
-                    encontrado = True
-                    break
+                imagen_bytes = Image.open(imagen_cargada)
+                rutas_imagenes = [os.path.join(RUTA_IMAGENES, img) for img in os.listdir(RUTA_IMAGENES)]
+                coincidencias = []
+                for ruta in rutas_imagenes:
+                    try:
+                        resultado = DeepFace.verify(img1_path=imagen_cargada, img2_path=ruta, enforce_detection=False)
+                        if resultado["verified"]:
+                            nombre_imagen = os.path.basename(ruta)
+                            fila = df[df["Imagen"] == nombre_imagen]
+                            if not fila.empty:
+                                coincidencias.append(fila)
+                    except Exception:
+                        pass
+                if coincidencias:
+                    resultados = pd.concat(coincidencias)
+                else:
+                    st.error("❌ No se encontraron coincidencias con la imagen subida.")
             except Exception as e:
-                st.error(f"Error comparando con {img_path}: {e}")
+                st.error(f"Error al procesar la imagen: {e}")
 
-        st.session_state.busqueda_realizada = True
-        if not encontrado:
-            resultados = pd.DataFrame()  # vacío para mostrar advertencia
-
-# ==============================
-# MOSTRAR RESULTADOS (con estilo)
-# ==============================
+# ===================== MOSTRAR RESULTADOS =====================
 if not resultados.empty:
-    st.subheader("✅ Resultados encontrados")
-
-    lista_resultados = []
     for _, row in resultados.iterrows():
-        with st.container():
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
-                if os.path.exists(img_path):
-                    st.image(img_path, width=200)
-            with col2:
-                st.markdown(
-                    f"""
-                    <div class="tarjeta">
-                        <p><b>ID:</b> {row['ID']}</p>
-                        <p><b>Nombre:</b> {row['NOMBRE']}</p>
-                        <p><b>Tipo ID:</b> {row['TIPO_DE_ID']}</p>
-                        <p><b>NUNC:</b> {row['NUNC']}</p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-        lista_resultados.append(row.to_dict())
+        st.markdown(
+            f"""
+            <div class="tarjeta">
+                <p><b>ID:</b> {row['ID']}</p>
+                <p><b>Nombre:</b> {row['Nombre']}</p>
+                <p><b>NUNC:</b> {row.get('NUNC', 'N/A')}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    # Descargar Excel
-    output = exportar_resultados(lista_resultados)
+    # Botón para descargar resultados
+    buffer = io.BytesIO()
+    resultados.to_excel(buffer, index=False)
+    buffer.seek(0)
     st.download_button(
         label="📥 Descargar resultados en Excel",
-        data=output,
+        data=buffer,
         file_name="resultados.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+elif opcion != "Por Imagen":  # Evitar mostrar error doble en búsqueda por imagen
+    if st.button("Verificar búsqueda vacía", disabled=True):  # Solo truco para evitar ejecución automática
+        pass
 
-elif st.session_state.busqueda_realizada:
-    st.warning("⚠️ No se encontraron resultados.")
+# ===================== CIERRE CONTENEDOR =====================
+st.markdown('</div>', unsafe_allow_html=True)
+
 
 
 
