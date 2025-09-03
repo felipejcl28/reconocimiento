@@ -26,7 +26,7 @@ def cargar_datos():
 
 df = cargar_datos()
 
-st.title("🔎 Búsqueda de Personas")
+st.title("🔎")
 
 # 📌 Opción de búsqueda
 opcion = st.radio("Elige cómo deseas buscar:", ["POR IDENTIFICACION", "POR NOMBRE", "POR FOTO"])
@@ -36,7 +36,7 @@ opcion = st.radio("Elige cómo deseas buscar:", ["POR IDENTIFICACION", "POR NOMB
 # =====================
 if opcion == "POR IDENTIFICACION":
     id_buscar = st.text_input("Escribe el ID a buscar:")
-    if st.button("Buscar por ID"):
+    if st.button("BUSCAR"):
         resultados = df[df["ID"] == id_buscar.strip()]
         if not resultados.empty:
             for _, row in resultados.iterrows():
@@ -55,7 +55,7 @@ if opcion == "POR IDENTIFICACION":
 # =====================
 elif opcion == "POR NOMBRE":
     nombre_buscar = st.text_input("Escribe el nombre (o parte del nombre) a buscar:")
-    if st.button("Buscar por Nombre"):
+    if st.button("BUSCAR"):
         nombre_normalizado = normalizar_texto(nombre_buscar)
         resultados = df[df["NOMBRE"].apply(lambda x: nombre_normalizado in normalizar_texto(x))]
         if not resultados.empty:
@@ -99,6 +99,7 @@ elif opcion == "POR FOTO":
                 st.warning("⚠️ No se encontró ninguna coincidencia.")
         except Exception as e:
             st.error(f"❌ Error en el reconocimiento facial: {e}")
+
 
 
 
