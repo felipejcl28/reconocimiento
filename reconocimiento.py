@@ -1,123 +1,126 @@
+import os
 import streamlit as st
 import pandas as pd
-import os
-from deepface import DeepFace
 from PIL import Image
-import numpy as np
-import hashlib
+from deepface import DeepFace
+from rapidfuzz import process
 
-# ======================
-# CONFIGURACIÓN
-# ======================
+# ==============================
+# CONFIGURACIÓN DE RUTAS
+# ==============================
 RUTA_EXCEL = os.path.join(os.getcwd(), "informacion.xlsx")
 RUTA_IMAGENES = os.path.join(os.getcwd(), "IMAGENES")
 
-# ======================
-# FUNCIONES
-# ======================
+# ==============================
+# FUNCIONES AUXILIARES
+# ==============================
+def cargar_datos():
+    if not os.path.exists(RUTA_EXCEL):
+        st.error("❌ No se encontró el archivo Excel")
+        return pd.DataFrame()
+    df = pd.read_excel(RUTA_EXCEL)
+    df.columns = df.columns.str.strip().str.upper()
+    return df
 
-def normalizar_texto(texto: str) -> str:
-    """Normaliza texto para comparaciones consistentes"""
-    if not isinstance(texto, str):
-        return ""
-    return texto.strip().lower()
+def mostrar_info_persona(row):
+    st.write(f"**ID:** {row['ID']}")
+    st.write(f"**Nombre:** {row['NOMBRE']}")
+    st.write(f"**Tipo de ID:** {row['TIPO DE ID']}")
+    st.write(f"**Municipio:** {row['MUNICIPIO']}")
+    st.write(f"**NUNC:** {row['NUNC']}")
+    
+    ruta_img = os.path.join(RUTA_IMAGENES, str(row["IMAGEN"]))
+    if os.path.exists(ruta_img):
+        st.image(ruta_img, caption=row["NOMBRE"], use_container_width=True)
+    else:
+        st.warning("⚠️ Imagen no encontrada en carpeta IMAGENES.")
 
-def calcular_hash_imagen(imagen_path):
-    """Devuelve hash SHA256 de una imagen"""
-    with open(imagen_path, "rb") as f:
-        bytes_img = f.read()
-        return hashlib.sha256(bytes_img).hexdigest()
-
-def cargar_excel():
-    if os.path.exists(RUTA_EXCEL):
-        df = pd.read_excel(RUTA_EXCEL)
-        # Normalizamos nombres de columnas
-        df.columns = [c.strip().upper() for c in df.columns]
-        # Columna auxiliar para nombre de archivo
-        if "IMAGEN" in df.columns:
-            df["IMAGEN_NORM"] = df["IMAGEN"].apply(lambda x: str(x).strip())
-        return df
-    return pd.DataFrame()
-
-def buscar_por_hash(uploaded_file, df):
-    """Verifica si la imagen subida existe idéntica en IMAGENES"""
-    uploaded_hash = hashlib.sha256(uploaded_file.read()).hexdigest()
-    uploaded_file.seek(0)  # Resetear puntero
-    for _, row in df.iterrows():
-        img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN_NORM"])
-        if os.path.exists(img_path):
-            if uploaded_hash == calcular_hash_imagen(img_path):
-                return row
-    return None
-
-def buscar_por_embeddings(uploaded_file, df, modelo, detector, umbral):
-    """Usa DeepFace para comparar embeddings"""
-    results = []
-    for _, row in df.iterrows():
-        img_db_path = os.path.join(RUTA_IMAGENES, row["IMAGEN_NORM"])
-        if os.path.exists(img_db_path):
-            try:
-                verify = DeepFace.verify(
-                    uploaded_file,
-                    img_db_path,
-                    model_name=modelo,
-                    detector_backend=detector,
-                    enforce_detection=False
-                )
-                distance = verify["distance"]
-                if distance <= umbral:
-                    results.append((row, distance))
-            except Exception as e:
-                print(f"Error con {img_db_path}: {e}")
-    return results
-
-# ======================
-# INTERFAZ STREAMLIT
-# ======================
-
-st.set_page_config(page_title="Reconocimiento Facial", layout="wide")
+# ==============================
+# APP STREAMLIT
+# ==============================
 st.title("🔍 Búsqueda de Personas")
 
-# Opciones en sidebar
-modelo = st.sidebar.selectbox("Modelo", ["ArcFace", "Facenet", "VGG-Face"])
-detector = st.sidebar.selectbox("Detector", ["mtcnn", "opencv", "ssd", "retinaface"])
-enforce_detection = st.sidebar.checkbox("Enforce detection (estricto)", value=False)
-umbral = st.sidebar.slider("Umbral distancia (<=)", 0.0, 1.0, 0.4, 0.01)
-usar_hash = st.sidebar.checkbox("Usar comparación por hash (idéntico contenido)", value=True)
-
-# Cargar base
-df = cargar_excel()
-
+df = cargar_datos()
 if df.empty:
-    st.error("❌ No se encontró el archivo informacion.xlsx")
-else:
-    uploaded_file = st.file_uploader("📤 Subir imagen para buscar", type=["jpg", "jpeg", "png"])
-    if uploaded_file:
-        st.image(uploaded_file, caption="Imagen cargada", width=250)
+    st.stop()
 
-        # Primero: buscar por hash
-        if usar_hash:
-            match_hash = buscar_por_hash(uploaded_file, df)
-            if match_hash is not None:
-                st.success(f"✅ Coincidencia exacta encontrada (hash) → {match_hash['NOMBRE']}")
-                st.image(os.path.join(RUTA_IMAGENES, match_hash["IMAGEN_NORM"]), width=250)
-            else:
-                st.info("ℹ️ No hay coincidencia exacta por hash.")
+opcion = st.radio("Elige cómo buscar:", ["Por nombre", "Por ID", "Por imagen"])
 
-        # Segundo: búsqueda por embeddings
-        results = buscar_por_embeddings(uploaded_file, df, modelo, detector, umbral)
-
-        if results:
-            st.subheader("👥 Posibles coincidencias")
-            for row, distance in sorted(results, key=lambda x: x[1]):
-                if distance == 0.0:
-                    st.success(f"🎯 MATCH EXACTO → {row['NOMBRE']} (distance={distance:.4f})")
-                else:
-                    st.warning(f"{row['NOMBRE']} (distance={distance:.4f})")
-
-                st.image(os.path.join(RUTA_IMAGENES, row["IMAGEN_NORM"]), width=200)
+# ==============================
+# BÚSQUEDA POR NOMBRE
+# ==============================
+if opcion == "Por nombre":
+    nombre = st.text_input("Ingrese el nombre:")
+    if st.button("Buscar"):
+        if nombre.strip() == "":
+            st.warning("⚠️ Ingrese un nombre.")
         else:
-            st.error("❌ No se encontró coincidencia con el umbral definido.")
+            # --- Coincidencia parcial
+            resultados = df[df["NOMBRE"].str.contains(nombre.strip(), case=False, na=False)]
+
+            # --- Si no encuentra, probar fuzzy
+            if resultados.empty:
+                candidatos = df["NOMBRE"].tolist()
+                mejor, score, _ = process.extractOne(nombre, candidatos, score_cutoff=70)
+                if mejor:
+                    st.info(f"🔎 Coincidencia aproximada encontrada: **{mejor}** (similitud {score:.1f}%)")
+                    resultados = df[df["NOMBRE"].str.contains(mejor, case=False, na=False)]
+
+            if not resultados.empty:
+                st.success(f"✅ Se encontraron {len(resultados)} resultados")
+                for _, row in resultados.iterrows():
+                    mostrar_info_persona(row)
+            else:
+                st.error("❌ No se encontró ninguna persona con ese nombre.")
+
+# ==============================
+# BÚSQUEDA POR ID
+# ==============================
+elif opcion == "Por ID":
+    id_buscar = st.text_input("Ingrese el ID:")
+    if st.button("Buscar"):
+        resultados = df[df["ID"].astype(str) == id_buscar.strip()]
+        if not resultados.empty:
+            st.success("✅ Persona encontrada")
+            for _, row in resultados.iterrows():
+                mostrar_info_persona(row)
+        else:
+            st.error("❌ No se encontró ninguna persona con ese ID.")
+
+# ==============================
+# BÚSQUEDA POR IMAGEN
+# ==============================
+elif opcion == "Por imagen":
+    archivo = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
+    if archivo is not None:
+        img = Image.open(archivo)
+        st.image(img, caption="Imagen cargada", use_container_width=True)
+
+        if st.button("Buscar"):
+            encontrado = False
+            for _, row in df.iterrows():
+                ruta_img = os.path.join(RUTA_IMAGENES, str(row["IMAGEN"]))
+                if not os.path.exists(ruta_img):
+                    continue
+                try:
+                    resultado = DeepFace.verify(
+                        img_path=archivo,
+                        db_path=ruta_img,
+                        model_name="ArcFace",
+                        detector_backend="mtcnn",
+                        enforce_detection=False,
+                        distance_metric="euclidean_l2"
+                    )
+                    if resultado["verified"]:
+                        st.success("✅ Persona encontrada")
+                        mostrar_info_persona(row)
+                        encontrado = True
+                        break
+                except Exception as e:
+                    st.warning(f"Error con {row['IMAGEN']}: {e}")
+
+            if not encontrado:
+                st.error("❌ No se encontró coincidencia por imagen.")
 
 
 
