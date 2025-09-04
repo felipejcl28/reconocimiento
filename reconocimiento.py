@@ -1,126 +1,88 @@
-import os
 import streamlit as st
 import pandas as pd
+import os
 from PIL import Image
 from deepface import DeepFace
 from rapidfuzz import process
 
-# ==============================
-# CONFIGURACIÓN DE RUTAS
-# ==============================
+# Rutas de archivos
 RUTA_EXCEL = os.path.join(os.getcwd(), "informacion.xlsx")
 RUTA_IMAGENES = os.path.join(os.getcwd(), "IMAGENES")
 
-# ==============================
-# FUNCIONES AUXILIARES
-# ==============================
+# Función para cargar base de datos
+@st.cache_data
 def cargar_datos():
-    if not os.path.exists(RUTA_EXCEL):
-        st.error("❌ No se encontró el archivo Excel")
-        return pd.DataFrame()
-    df = pd.read_excel(RUTA_EXCEL)
-    df.columns = df.columns.str.strip().str.upper()
-    return df
+    return pd.read_excel(RUTA_EXCEL)
 
-def mostrar_info_persona(row):
-    st.write(f"**ID:** {row['ID']}")
-    st.write(f"**Nombre:** {row['NOMBRE']}")
-    st.write(f"**Tipo de ID:** {row['TIPO DE ID']}")
-    st.write(f"**Municipio:** {row['MUNICIPIO']}")
-    st.write(f"**NUNC:** {row['NUNC']}")
-    
-    ruta_img = os.path.join(RUTA_IMAGENES, str(row["IMAGEN"]))
-    if os.path.exists(ruta_img):
-        st.image(ruta_img, caption=row["NOMBRE"], use_container_width=True)
+# Función búsqueda difusa por nombre o ID
+def buscar_por_texto(df, query, columna):
+    opciones = df[columna].astype(str).tolist()
+    coincidencia, score, idx = process.extractOne(query, opciones)
+    if score > 70:  # porcentaje de similitud
+        return df.iloc[[idx]]
     else:
-        st.warning("⚠️ Imagen no encontrada en carpeta IMAGENES.")
+        return pd.DataFrame()
 
-# ==============================
-# APP STREAMLIT
-# ==============================
-st.title("🔍 Búsqueda de Personas")
+# Función búsqueda por imagen
+def buscar_por_imagen(df, imagen_path):
+    resultados = []
+    for _, row in df.iterrows():
+        try:
+            img_db = os.path.join(RUTA_IMAGENES, row["Imagen"])
+            resultado = DeepFace.verify(img1_path=imagen_path, img2_path=img_db, enforce_detection=False)
+            if resultado["verified"]:
+                resultados.append(row)
+        except Exception as e:
+            print(f"Error con {row['Imagen']}: {e}")
+    return pd.DataFrame(resultados)
 
+# Interfaz Streamlit
+st.title("🔎 Búsqueda de Personas")
+
+# Cargar base
 df = cargar_datos()
-if df.empty:
-    st.stop()
 
 opcion = st.radio("Elige cómo buscar:", ["Por nombre", "Por ID", "Por imagen"])
 
-# ==============================
-# BÚSQUEDA POR NOMBRE
-# ==============================
 if opcion == "Por nombre":
     nombre = st.text_input("Ingrese el nombre:")
     if st.button("Buscar"):
-        if nombre.strip() == "":
-            st.warning("⚠️ Ingrese un nombre.")
+        resultados = buscar_por_texto(df, nombre, "Nombre")
+        if not resultados.empty:
+            st.success("✅ Resultados encontrados:")
+            st.dataframe(resultados)
         else:
-            # --- Coincidencia parcial
-            resultados = df[df["NOMBRE"].str.contains(nombre.strip(), case=False, na=False)]
+            st.warning("⚠️ No se encontraron coincidencias.")
 
-            # --- Si no encuentra, probar fuzzy
-            if resultados.empty:
-                candidatos = df["NOMBRE"].tolist()
-                mejor, score, _ = process.extractOne(nombre, candidatos, score_cutoff=70)
-                if mejor:
-                    st.info(f"🔎 Coincidencia aproximada encontrada: **{mejor}** (similitud {score:.1f}%)")
-                    resultados = df[df["NOMBRE"].str.contains(mejor, case=False, na=False)]
-
-            if not resultados.empty:
-                st.success(f"✅ Se encontraron {len(resultados)} resultados")
-                for _, row in resultados.iterrows():
-                    mostrar_info_persona(row)
-            else:
-                st.error("❌ No se encontró ninguna persona con ese nombre.")
-
-# ==============================
-# BÚSQUEDA POR ID
-# ==============================
 elif opcion == "Por ID":
     id_buscar = st.text_input("Ingrese el ID:")
     if st.button("Buscar"):
-        resultados = df[df["ID"].astype(str) == id_buscar.strip()]
+        resultados = buscar_por_texto(df, id_buscar, "ID")
         if not resultados.empty:
-            st.success("✅ Persona encontrada")
-            for _, row in resultados.iterrows():
-                mostrar_info_persona(row)
+            st.success("✅ Resultados encontrados:")
+            st.dataframe(resultados)
         else:
-            st.error("❌ No se encontró ninguna persona con ese ID.")
+            st.warning("⚠️ No se encontraron coincidencias.")
 
-# ==============================
-# BÚSQUEDA POR IMAGEN
-# ==============================
 elif opcion == "Por imagen":
-    archivo = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
-    if archivo is not None:
-        img = Image.open(archivo)
+    archivo_imagen = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
+    if archivo_imagen:
+        # ✅ Convertir archivo a objeto PIL antes de mostrarlo
+        img = Image.open(archivo_imagen)
         st.image(img, caption="Imagen cargada", use_container_width=True)
 
-        if st.button("Buscar"):
-            encontrado = False
-            for _, row in df.iterrows():
-                ruta_img = os.path.join(RUTA_IMAGENES, str(row["IMAGEN"]))
-                if not os.path.exists(ruta_img):
-                    continue
-                try:
-                    resultado = DeepFace.verify(
-                        img_path=archivo,
-                        db_path=ruta_img,
-                        model_name="ArcFace",
-                        detector_backend="mtcnn",
-                        enforce_detection=False,
-                        distance_metric="euclidean_l2"
-                    )
-                    if resultado["verified"]:
-                        st.success("✅ Persona encontrada")
-                        mostrar_info_persona(row)
-                        encontrado = True
-                        break
-                except Exception as e:
-                    st.warning(f"Error con {row['IMAGEN']}: {e}")
+        # Guardar temporalmente para comparar en DeepFace
+        temp_path = "temp.jpg"
+        img.save(temp_path)
 
-            if not encontrado:
-                st.error("❌ No se encontró coincidencia por imagen.")
+        if st.button("Buscar"):
+            resultados = buscar_por_imagen(df, temp_path)
+            if not resultados.empty:
+                st.success("✅ Resultados encontrados:")
+                st.dataframe(resultados)
+            else:
+                st.warning("⚠️ No se encontraron coincidencias.")
+
 
 
 
