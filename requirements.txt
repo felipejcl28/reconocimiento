@@ -1,9 +1,15 @@
-streamlit
-pandas
-pillow
-deepface
-opencv-python-headless
-tensorflow-cpu==2.12.0
-keras==2.12.0
-openpyxl
+# Streamlit
+streamlit==1.36.0
 
+# DeepFace y dependencias principales
+deepface==0.0.75
+tensorflow==2.12.0
+
+# OpenCV (sin GUI, compatible con cloud)
+opencv-python-headless==4.8.1.78
+
+# Librerías de soporte
+pandas==2.1.4
+numpy==1.23.5
+matplotlib==3.7.1
+Pillow==10.0.0
