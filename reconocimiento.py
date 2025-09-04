@@ -78,7 +78,7 @@ elif opcion == "Por ID":
         st.session_state.busqueda_realizada = True
 
 # ==============================
-# BÚSQUEDA POR IMAGEN
+# BÚSQUEDA POR IMAGEN (mejorada con DeepFace.find)
 # ==============================
 elif opcion == "Por imagen":
     imagen_subida = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
@@ -87,21 +87,29 @@ elif opcion == "Por imagen":
         with open(img_temp, "wb") as f:
             f.write(imagen_subida.getbuffer())
 
-        encontrado = False
-        for _, row in df.iterrows():
-            img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
-            try:
-                result = DeepFace.verify(img1_path=img_temp, img2_path=img_path, enforce_detection=False)
-                if result["verified"]:
-                    resultados = pd.DataFrame([row])
-                    encontrado = True
-                    break
-            except Exception as e:
-                st.error(f"Error comparando con {img_path}: {e}")
+        try:
+            resultados_busqueda = DeepFace.find(
+                img_path=img_temp,
+                db_path=RUTA_IMAGENES,
+                enforce_detection=True,
+                model_name="VGG-Face",   # También puedes probar: "Facenet512", "ArcFace"
+                detector_backend="opencv"
+            )
+
+            if not resultados_busqueda[0].empty:
+                mejor_match = resultados_busqueda[0].iloc[0]
+                img_encontrada = os.path.basename(mejor_match["identity"])
+
+                # Filtramos en el Excel por la columna IMAGEN
+                resultados = df[df["IMAGEN"] == img_encontrada]
+            else:
+                resultados = pd.DataFrame()
+
+        except Exception as e:
+            st.error(f"Error en la búsqueda por imagen: {e}")
+            resultados = pd.DataFrame()
 
         st.session_state.busqueda_realizada = True
-        if not encontrado:
-            resultados = pd.DataFrame()  # vacío para mostrar advertencia
 
 # ==============================
 # MOSTRAR RESULTADOS
@@ -111,7 +119,6 @@ if not resultados.empty:
 
     lista_resultados = []
     for _, row in resultados.iterrows():
-        # Usamos columnas para organizar foto e info
         col1, col2 = st.columns([1, 2])
 
         with col1:
@@ -125,7 +132,7 @@ if not resultados.empty:
             st.markdown(f"**📄 Tipo ID:** {row['TIPO_DE_ID']}")
             st.markdown(f"**🔑 NUNC:** {row['NUNC']}")
 
-        st.markdown("---")  # Separador elegante entre resultados
+        st.markdown("---")
         lista_resultados.append(row.to_dict())
 
     # Descargar Excel
@@ -139,6 +146,7 @@ if not resultados.empty:
 
 elif st.session_state.busqueda_realizada:
     st.warning("⚠️ No se encontraron resultados.")
+
 
 
 
