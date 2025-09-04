@@ -78,10 +78,14 @@ elif opcion == "Por ID":
         st.session_state.busqueda_realizada = True
 
 # ==============================
-# BÚSQUEDA POR IMAGEN (mejorada con DeepFace.find)
+# BÚSQUEDA POR IMAGEN (Top 3 matches con distancia)
 # ==============================
 elif opcion == "Por imagen":
     imagen_subida = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
+
+    # Checkbox para controlar enforce_detection
+    usar_deteccion = st.checkbox("🔍 Usar detección estricta de rostro (enforce_detection)", value=True)
+
     if st.button("Buscar", key="buscar_imagen") and imagen_subida:
         img_temp = os.path.join("temp.jpg")
         with open(img_temp, "wb") as f:
@@ -91,17 +95,25 @@ elif opcion == "Por imagen":
             resultados_busqueda = DeepFace.find(
                 img_path=img_temp,
                 db_path=RUTA_IMAGENES,
-                enforce_detection=True,
-                model_name="VGG-Face",   # También puedes probar: "Facenet512", "ArcFace"
-                detector_backend="opencv"
+                enforce_detection=usar_deteccion,
+                model_name="VGG-Face",
+                detector_backend="mtcnn"
             )
 
             if not resultados_busqueda[0].empty:
-                mejor_match = resultados_busqueda[0].iloc[0]
-                img_encontrada = os.path.basename(mejor_match["identity"])
+                # Tomamos los 3 mejores resultados
+                top_matches = resultados_busqueda[0].head(3)
+                resultados = pd.DataFrame()
 
-                # Filtramos en el Excel por la columna IMAGEN
-                resultados = df[df["IMAGEN"] == img_encontrada]
+                for _, match in top_matches.iterrows():
+                    img_encontrada = os.path.basename(match["identity"])
+                    distancia = match["distance"]
+
+                    # Buscar en el Excel
+                    fila = df[df["IMAGEN"] == img_encontrada].copy()
+                    if not fila.empty:
+                        fila["DISTANCIA"] = round(distancia, 4)  # añadimos distancia al DataFrame
+                        resultados = pd.concat([resultados, fila])
             else:
                 resultados = pd.DataFrame()
 
@@ -115,7 +127,7 @@ elif opcion == "Por imagen":
 # MOSTRAR RESULTADOS
 # ==============================
 if not resultados.empty:
-    st.subheader("Resultados encontrados:")
+    st.subheader("Resultados encontrados (Top 3):")
 
     lista_resultados = []
     for _, row in resultados.iterrows():
@@ -131,6 +143,7 @@ if not resultados.empty:
             st.markdown(f"**👤 Nombre:** {row['NOMBRE']}")
             st.markdown(f"**📄 Tipo ID:** {row['TIPO_DE_ID']}")
             st.markdown(f"**🔑 NUNC:** {row['NUNC']}")
+            st.markdown(f"**📊 Distancia de similitud:** {row['DISTANCIA']}")
 
         st.markdown("---")
         lista_resultados.append(row.to_dict())
@@ -146,6 +159,7 @@ if not resultados.empty:
 
 elif st.session_state.busqueda_realizada:
     st.warning("⚠️ No se encontraron resultados.")
+
 
 
 
