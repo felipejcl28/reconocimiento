@@ -1,109 +1,141 @@
 import streamlit as st
 import pandas as pd
+import unicodedata
 import os
-from PIL import Image
 from deepface import DeepFace
-from rapidfuzz import process
+from PIL import Image
+from io import BytesIO
 
-# ========================
-# Configuración de rutas
-# ========================
+# ==============================
+# CONFIGURACIÓN DE RUTAS
+# ==============================
 RUTA_EXCEL = os.path.join(os.getcwd(), "informacion.xlsx")
 RUTA_IMAGENES = os.path.join(os.getcwd(), "IMAGENES")
 
-# ========================
-# Funciones auxiliares
-# ========================
+# ==============================
+# FUNCIONES AUXILIARES
+# ==============================
+def normalizar_texto(texto: str) -> str:
+    """Normaliza texto: minúsculas, sin tildes ni espacios extra"""
+    if not isinstance(texto, str):
+        return ""
+    texto = texto.strip().lower()
+    texto = unicodedata.normalize("NFD", texto)
+    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
+    return texto
+
 def cargar_datos():
-    if not os.path.exists(RUTA_EXCEL):
-        st.error("❌ No se encontró el archivo Excel.")
-        return pd.DataFrame()
-    df = pd.read_excel(RUTA_EXCEL)
-    df["IMAGEN_NORM"] = df["IMAGEN"].apply(lambda x: str(x).strip().lower())
+    """Carga el Excel y normaliza nombres de columnas"""
+    df = pd.read_excel(RUTA_EXCEL, dtype=str)
+    df = df.rename(columns=lambda x: x.strip().upper().replace(" ", "_"))
     return df
 
-def buscar_por_nombre(df, nombre):
-    nombres = df["NOMBRE"].tolist()
-    mejor, score, idx = process.extractOne(nombre, nombres)
-    if score > 80:  # umbral de similitud
-        return df.iloc[[idx]]
-    return pd.DataFrame()
+def exportar_resultados(resultados):
+    """Exporta resultados encontrados a Excel descargable"""
+    output = BytesIO()
+    df_resultados = pd.DataFrame(resultados)
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_resultados.to_excel(writer, index=False, sheet_name="Resultados")
+    output.seek(0)
+    return output
 
-def buscar_por_id(df, id_buscar):
-    resultados = df[df["ID"].astype(str) == str(id_buscar)]
-    return resultados
-
-def buscar_por_imagen(df, ruta_imagen, modelo="ArcFace", detector="mtcnn", umbral=0.68):
-    resultados = []
-    for _, fila in df.iterrows():
-        ruta_base = os.path.join(RUTA_IMAGENES, fila["IMAGEN"])
-        if os.path.exists(ruta_base):
-            try:
-                verif = DeepFace.verify(
-                    img1_path=ruta_imagen,
-                    img2_path=ruta_base,
-                    model_name=modelo,
-                    detector_backend=detector,
-                    enforce_detection=False
-                )
-                if verif["distance"] <= umbral:
-                    resultados.append(fila)
-            except Exception as e:
-                st.warning(f"⚠️ Error con {fila['IMAGEN']}: {e}")
-    return pd.DataFrame(resultados)
-
-# ========================
-# Interfaz Streamlit
-# ========================
+# ==============================
+# INTERFAZ STREAMLIT
+# ==============================
+st.set_page_config(page_title="Búsqueda de Personas", layout="centered")
 st.title("🔍 Búsqueda de Personas")
 
+# Cargar datos
 df = cargar_datos()
-if df.empty:
-    st.stop()
+df["NOMBRE_NORM"] = df["NOMBRE"].apply(normalizar_texto)
 
+# Control de búsqueda
+if "busqueda_realizada" not in st.session_state:
+    st.session_state.busqueda_realizada = False
+
+# Opciones de búsqueda
 opcion = st.radio("Elige cómo buscar:", ["Por nombre", "Por ID", "Por imagen"])
 
+resultados = pd.DataFrame()
+
+# ==============================
+# BÚSQUEDA POR NOMBRE
+# ==============================
 if opcion == "Por nombre":
-    nombre = st.text_input("Escribe el nombre")
-    if st.button("Buscar"):
-        resultados = buscar_por_nombre(df, nombre)
-        if not resultados.empty:
-            st.success("✅ Resultado encontrado:")
-            st.dataframe(resultados)
-        else:
-            st.warning("⚠️ No se encontraron coincidencias.")
+    nombre = st.text_input("Escribe el nombre (o parte del nombre) a buscar:")
+    if st.button("Buscar", key="buscar_nombre"):
+        nombre_norm = normalizar_texto(nombre)
+        resultados = df[df["NOMBRE_NORM"].str.contains(nombre_norm, na=False)]
+        st.session_state.busqueda_realizada = True
 
+# ==============================
+# BÚSQUEDA POR ID
+# ==============================
 elif opcion == "Por ID":
-    id_buscar = st.text_input("Escribe el ID")
-    if st.button("Buscar"):
-        resultados = buscar_por_id(df, id_buscar)
-        if not resultados.empty:
-            st.success("✅ Resultado encontrado:")
-            st.dataframe(resultados)
-        else:
-            st.warning("⚠️ No se encontraron coincidencias.")
+    id_buscar = st.text_input("Escribe el ID a buscar:")
+    if st.button("Buscar", key="buscar_id"):
+        resultados = df[df["ID"] == id_buscar]
+        st.session_state.busqueda_realizada = True
 
+# ==============================
+# BÚSQUEDA POR IMAGEN
+# ==============================
 elif opcion == "Por imagen":
-    archivo_imagen = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
-    if archivo_imagen is not None:
-        try:
-            # ✅ Convertir archivo subido a imagen PIL
-            img = Image.open(archivo_imagen)
-            st.image(img, caption="Imagen cargada", use_container_width=True)
+    imagen_subida = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
+    if st.button("Buscar", key="buscar_imagen") and imagen_subida:
+        img_temp = os.path.join("temp.jpg")
+        with open(img_temp, "wb") as f:
+            f.write(imagen_subida.getbuffer())
 
-            # ✅ Guardar temporalmente
-            temp_path = os.path.join(os.getcwd(), "temp.jpg")
-            img.save(temp_path)
+        encontrado = False
+        for _, row in df.iterrows():
+            img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
+            try:
+                result = DeepFace.verify(img1_path=img_temp, img2_path=img_path, enforce_detection=False)
+                if result["verified"]:
+                    resultados = pd.DataFrame([row])
+                    encontrado = True
+                    break
+            except Exception as e:
+                st.error(f"Error comparando con {img_path}: {e}")
 
-            if st.button("Buscar"):
-                resultados = buscar_por_imagen(df, temp_path)
-                if not resultados.empty:
-                    st.success("✅ Resultados encontrados:")
-                    st.dataframe(resultados)
-                else:
-                    st.warning("⚠️ No se encontraron coincidencias.")
-        except Exception as e:
-            st.error(f"Error al procesar la imagen: {e}")
+        st.session_state.busqueda_realizada = True
+        if not encontrado:
+            resultados = pd.DataFrame()  # vacío para mostrar advertencia
+
+# ==============================
+# MOSTRAR RESULTADOS
+# ==============================
+if not resultados.empty:
+    st.subheader("Resultados encontrados:")
+
+    lista_resultados = []
+    for _, row in resultados.iterrows():
+        # Mostrar foto
+        img_path = os.path.join(RUTA_IMAGENES, row["IMAGEN"])
+        if os.path.exists(img_path):
+            st.image(img_path, width=150)
+
+        # Mostrar datos
+        st.markdown(f"**ID:** {row['ID']}")
+        st.markdown(f"**Nombre:** {row['NOMBRE']}")
+        st.markdown(f"**Tipo ID:** {row['TIPO_DE_ID']}")
+        st.markdown(f"**NUNC:** {row['NUNC']}")
+
+        lista_resultados.append(row.to_dict())
+
+    # Descargar Excel
+    output = exportar_resultados(lista_resultados)
+    st.download_button(
+        label="📥 Descargar resultados en Excel",
+        data=output,
+        file_name="resultados.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+elif st.session_state.busqueda_realizada:
+    st.warning("⚠️ No se encontraron resultados.")
+
 
 
 
